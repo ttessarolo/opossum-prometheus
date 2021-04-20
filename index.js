@@ -1,6 +1,6 @@
-'use strict';
+"use strict";
 
-const client = require('prom-client');
+const client = require("prom-client");
 
 // The current tests has circuit names like:
 // 'circuit one' (with blank space) and others like
@@ -11,16 +11,16 @@ const client = require('prom-client');
 // https://prometheus.io/docs/concepts/data_model/#metric-names-and-labels
 
 class PrometheusMetrics {
-  constructor (options = {}) {
-    this._registry = options.registry || client.register;
+  constructor(options = {}) {
+    this._registry = options.registry || options.client.register || client.register;
     this._metricPrefix = options.metricPrefix || ``;
-    this._client = client;
+    this._client = options.client || client;
     this._options = options;
     this._counter = new this._client.Counter({
       name: `${this._metricPrefix}circuit`,
       help: `A count of all circuit' events`,
       registers: [this._registry],
-      labelNames: ['name', 'event']
+      labelNames: ["name", "event"],
     });
 
     if (this.exposePerformanceMetrics()) {
@@ -28,16 +28,15 @@ class PrometheusMetrics {
         name: `${this._metricPrefix}circuit_perf`,
         help: `A summary of all circuit's events`,
         registers: [this._registry],
-        labelNames: ['name', 'event']
+        labelNames: ["name", "event"],
       });
     }
 
     if (!options.registry) {
-      this.interval = this._client
-        .collectDefaultMetrics({
-          prefix: `${this._metricPrefix}opossum_`,
-          timeout: 5000
-        });
+      this.interval = this._client.collectDefaultMetrics({
+        prefix: `${this._metricPrefix}opossum_`,
+        timeout: 5000,
+      });
     }
 
     if (options.circuits) {
@@ -45,26 +44,30 @@ class PrometheusMetrics {
     }
   }
 
-  exposePerformanceMetrics () {
-    return this._options === undefined ||
+  exposePerformanceMetrics() {
+    return (
+      this._options === undefined ||
       this._options.exposePerformanceMetrics === undefined ||
-      this._options.exposePerformanceMetrics;
+      this._options.exposePerformanceMetrics
+    );
   }
 
-  add (circuits) {
+  add(circuits) {
     if (!circuits) {
       return;
     }
     circuits = Array.isArray(circuits) ? circuits : [circuits];
 
-    circuits.forEach(circuit => {
+    circuits.forEach((circuit) => {
       for (const eventName of circuit.eventNames()) {
-        circuit.on(eventName, _ => {
+        circuit.on(eventName, (_) => {
           this._counter.labels(circuit.name, eventName).inc();
         });
 
-        if (this.exposePerformanceMetrics() &&
-          (eventName === 'success' || eventName === 'failure')) {
+        if (
+          this.exposePerformanceMetrics() &&
+          (eventName === "success" || eventName === "failure")
+        ) {
           // not the timeout event because runtime == timeout
           circuit.on(eventName, (result, runTime) => {
             this._summary.labels(circuit.name, eventName).observe(runTime);
@@ -74,16 +77,16 @@ class PrometheusMetrics {
     });
   }
 
-  clear () {
+  clear() {
     clearInterval(this.interval);
     this._registry.clear();
   }
 
-  get metrics () {
+  get metrics() {
     return this._registry.metrics();
   }
 
-  get client () {
+  get client() {
     return this._client;
   }
 }
